@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>FunkyHelper</title>
+        <%- include("partials/bootstrap.ejs") %>
+    </head>
+    <body>
+        <%- include("partials/navbar.ejs") %>
+        <div class="container my-5">
+            <div class="row align-items-center">
+                <div class="col-12 col-md-6 text-center text-lg-start">
+                    <img src="/profile-picture.png" class="img-fluid" alt="FunkyHelper Profile Picture">
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="card bg-body-tertiary">
+                        <div class="card-header">
+                            <h5 class="card-title">FunkyHelper says...</h5>
+                        </div>
+                        <div class="card-body fs-3">
+                            <%
+                            var selectedNum = ~~(Math.random()*choices.length);
+                            var selectedChoice = choices[selectedNum];
+                            %>
+                            <%- selectedChoice %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="alert alert-secondary fs-5">
+                Found an issue? Got an idea? Check out the <a href="https://github.com/ManiacOfGitHub/funkyhelper">GitHub repo</a>!
+            </div>
+            <div class="text-center fs-4 my-5">More cool stuff will be coming to this site <b>SOON™</b>!</div>
+        </div>
+    </body>
+</html>

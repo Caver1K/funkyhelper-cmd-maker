@@ -1,0 +1,113 @@
+{
+  "token": "TOKEN_GOES_HERE",
+  "logChannelId": "1461160220880408778",
+  "importantLogChannelId": "1461160220880408777",
+  "activeModeratorsId": "1461160220305789023",
+  "allowRoleList": [
+    "1461160220305789030",
+    "1461160220305789023"
+  ],
+  "helperPlusRoleList": [
+    "1461160220305789030",
+    "1461160220305789023"
+  ],
+  "staffRoleList": [
+    "1461160220305789021",
+    "1461160220305789026"
+  ],
+  "breakRoleList": [
+    "1461160220305789022",
+    "1461160220305789026"
+  ],
+  "onBreakRoleId": "1461160220360310916",
+  "switchPiracyRoleId": "1461160220079427657",
+  "switchPiracyAppealedRoleId": "1461160219995279392",
+  "stickyMessageChannels": {
+    "1461160222302273579": ["switchPiracy"],
+    "1461160222302273578": ["switchPiracy","botCmds"],
+    "1461160222302273584": ["switchPiracy"],
+    "1461160222302273583": ["mcSmp"],
+    "1527823490139558038": ["appeals"]
+  },
+  "matchmakingRoleId": "1461160220020572260",
+  "matchmakingChannelId": "1461160222784487552",
+  "botOwners": ["366366250387111937", "1141501087191408661", "544316051827982377"],
+  "fullPermsMode": true,
+  "withdrawalScamCheckEnabled": true,
+  "extraWithdrawalScamTerms": ["caraslots"],
+  "consoleHelpChannels": {
+    "1461160222302273578": "emulator",
+    "1461160222302273579": "switch",
+    "1461160222302273580": "wiiu",
+    "1461160222302273581": "3ds",
+    "1461160222302273582": "wii",
+    "1461160222302273583": "dsi"
+  },
+  "consoleAliases": {
+    "emulator": ["emu"],
+    "switch": ["sw1", "ns", "nx"],
+    "wii": ["vwii"],
+    "dsi": ["ds", "nds"] 
+  },
+  "modChatChannelId": "1461160220880408774",
+  "botCmdsChannelId": "1461160222784487551",
+  "echoChannelIds": ["1461160220880408775","1461160220880408776","1461160222784487550"],
+  "logMinRole": "1461160220079427656",
+  "moderatorRole": "1461160220343406760",
+  "birthdayRoleId": "1461160220079427663",
+  "staffHangoutChannelId": "1461160220880408776",
+  "birthdayAnnouncementChannelId": "1461160222784487550",
+  "noHelpCommandChannelList": ["1461160222784487550","1461160222784487552","1461160222784487553"],
+  "funnyOptions": [
+    " has disintegrated.",
+    "'s been gone.",
+    " should've been more funky.",
+    " forgot to pay their taxes.",
+    " couldn't figure out 1 + 1 and left to search for the answer.",
+    " fell into the ocean and drowned.",
+    " walked the plank.",
+    " hacked someone's Steam account and Valve handled them.",
+    "'s been donated for nuclear research.",
+    " was given the blue pill and can't continue going forward in this server.",
+    "'s joined Team Rocket, and is now blasting off again.",
+    " didn't stick the landing.",
+    " felt the wrath of Darth Vader.",
+    " was moved to a SanDian SD card.",
+    " downloaded more RAM.",
+    " was morphed into a New 2DS XL and was opened for repair.",
+    " had their name written on the Death Note book."
+  ],
+  "mc2faChannelId": "1461160221115416757",
+  "mcInfoLink": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "cosmeticRoleMap": {
+    "1461160220033159355": "1461160220050063485",
+    "1461160219995279393": "1461160220050063486"
+  },
+  "mcPingRoleId": "1518797832193183856",
+  "mcManagerRoleId": "1518797523790204959",
+  "mcRecVersion": "21.1.2",
+  "webPort": 3000,
+  "excludeLogChannels": ["1461160220880408774"],
+  "appealsChannelId": "1527823490139558038",
+  "noHelpRoleId": "1527830205782298714",
+  "appealMuteRoleId": "1527830291668930610",
+  "appealsTemplateLink": "https://discord.com/channels/1461160219995279390/1527823490139558038/1527829767213023404",
+  "staffConfig": ["funnyOptions"],
+  "modPingMuteRoleId": "1530682292551290981",
+  "funkyhelperSays": [
+  "Dyno and Carl scream when I come 'round",
+  "Random funny message",
+  "Stay Funky and Happy Modding!",
+  "Wait, where are my legs?",
+  "i use debian btw",
+  "<a href=\"https://i.kym-cdn.com/photos/images/original/002/436/670/e9c\">Did you know it's actually really easy to mod a 3DS?</a>",
+  "better than llms",
+  "SCOTT LOOK AT ME I'M FUNKY TOO",
+  "I pay for all of my games legitimately, Nintendo. Yup. I'm a good bot.",
+  "Holy shit, there's a new Switch 2 exploit!<br><span class=\"fs-6\">Nah, just kidding. Can you imagine tho?</span>",
+  "Your IP address is 127.0.0.1",
+  "Call your mom. Or don't. I'm not the boss of you, I'm a Discord bot.",
+  "Stay Funky and Happy Paying for Switch Games"
+  ],
+  "ghostPingMaxTime": 60
+}

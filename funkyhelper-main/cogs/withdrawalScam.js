@@ -1,0 +1,181 @@
+/*
+This cog detects a common scam posted by bots on hijacked Discord accounts with 4 images and the "Withdrawal Success!" message on the last 2 images.
+*/
+
+var {EmbedBuilder, AttachmentBuilder} = require("discord.js");
+var util = require('../util');
+var fs = require('fs');
+var scribe;
+var lock = false;
+var tempSusMessages = [];
+var dangerUserId = null;
+var scamDetectedAndBanned = false;
+
+module.exports = (client, logChannels, config) => {
+    async function onReady() {
+        scribe = (await import('scribe.js-ocr')).default;
+    }
+
+    async function onMessage(message) {
+        if(!config.fullPermsMode || !config.withdrawalScamCheckEnabled) return;
+        if((dangerUserId == message.author.id) && scamDetectedAndBanned) {
+            try {
+                await message.delete();
+                await logChannels.important.send("A message in <#"+message.channel.id+"> from " + message.author.toString() + " (" + message.author.id + ") was caught after the user was temporarily banned and has now been deleted. (Note: This was done via `dangerUserId`, which means that this message was processed/sent after the user had already been banned.)");
+            } catch(err) {}
+            return;
+        }
+        if(message.attachments.size < 2) return;
+        if(message.attachments.size > 4) return;
+        if((message.content != "") && (!message.content.toLowerCase().includes("bro"))) return;
+
+        var scamCount = 0;
+        var attachments = [...message.attachments.values()];
+        for(var i in attachments) {
+            if(!attachments[i].contentType.startsWith("image")) return;
+        }
+
+        if(lock) {
+            if(message.author.id == dangerUserId) {
+                tempSusMessages.push(message);
+            }
+            return;
+        }
+
+
+        lock = true;
+        tempSusMessages.push(message);
+        dangerUserId = message.author.id;
+
+        let terms = ["withdraw", "promo code", "promocode", "was successfull", ...config.extraWithdrawalScamTerms];
+
+        let suspiciousMsgEmbed = new EmbedBuilder();
+        suspiciousMsgEmbed.setTitle("Potential Withdrawal Scam Message Detected!");
+        suspiciousMsgEmbed.setDescription("The bot has detected a suspicious message ("+message.attachments.size+" images, no message content).\nThis message will now be processed with OCR to see if it's the withdrawal scam.\n"+message.url+"\nSent by " + message.author.toString() + " (" + message.author.username + ", " + message.author.id + ")\nThe following terms will be used: " + terms.join(", ")+"\nDuring this testing, no other messages will be observed for the withdrawal scam.");
+        suspiciousMsgEmbed.setColor("Gold");
+        await logChannels.important.send({embeds:[suspiciousMsgEmbed]});
+
+        for(var i in attachments) {
+            await logChannels.important.send("Downloading attachment " + (parseInt(i) + 1) + " of " + (message.attachments.size));
+            let file = await fetch(attachments[i].url);
+			let fileData = Buffer.from(await file.arrayBuffer());
+            fs.writeFileSync(attachments[i].name, fileData);
+            await logChannels.important.send({files: [attachments[i].name]});
+
+            await logChannels.important.send("Testing attachment " + (parseInt(i) + 1) + " of " + (message.attachments.size));
+            var text = await scribe.extractText([attachments[i].name]);
+            var textFile = new AttachmentBuilder().setName(attachments[i].name.split(".").slice(0,-1).join(".") + ".txt").setFile(Buffer.from(text));
+            await logChannels.important.send({content: "Attachment " + (parseInt(i) + 1) + " contains the following text:", files: [textFile]});
+            fs.unlinkSync(attachments[i].name);
+            terms.forEach(a=>{
+                if(text.toLowerCase().includes(a)) {
+                    scamCount++;
+                }
+            })
+            await logChannels.important.send("Attachment " + (parseInt(i) + 1) + " has been processed. The scamCount is now " + scamCount.toString() + ".");
+            if(scamCount >= 2) break;
+        }
+
+        if(scamCount < 2) {
+            let scamNotDetectedEmbed = new EmbedBuilder();
+            scamNotDetectedEmbed.setTitle("Withdrawal Scam Not Detected");
+            scamNotDetectedEmbed.setDescription("This message seems to be legit. Let a Bot Owner know if this is incorrect.");
+            scamNotDetectedEmbed.setColor("Green");
+            await logChannels.important.send({embeds: [scamNotDetectedEmbed]});
+            await liftLock();
+            return;
+        }
+
+        let scamDetectedEmbed = new EmbedBuilder();
+        scamDetectedEmbed.setTitle("Withdrawal Scam Detected!");
+        scamDetectedEmbed.setDescription("The message has been detected to be a withdrawal scam.\nThe user will now be kicked and all messages in the last 24 hours will be removed.\nAttempting to DM the user...");
+        scamDetectedEmbed.setColor("Red");
+        await logChannels.important.send({embeds: [scamDetectedEmbed]});
+
+        let member = message.member ?? await message.guild?.members.fetch(message.author.id).catch(()=>null);
+        if(!member) {
+            await logChannels.important.send(`<@&${config.activeModeratorsId}> Warning! The member object for ${message.author.toString()} (${message.author.id}) could not be resolved, so they could not be banned. They have likely already left the server. Please review manually.`);
+            await liftLock();
+            return;
+        }
+
+        try {
+            let scamKickedEmbed = new EmbedBuilder();
+            scamKickedEmbed.setTitle("Suspicious Activity");
+            scamKickedEmbed.setDescription("You have been kicked from " + message.guild.name + " due to messages that seem to be created by a bot that has hijacked your account. Once you have verified that your account is back under your control, you can rejoin [here](https://discord.gg/eVQkMaTQw2).");
+            scamKickedEmbed.setColor("DarkRed");
+            await member.send({embeds: [scamKickedEmbed]});
+            await logChannels.important.send("DM succeeded!");
+        } catch(err) {
+            await logChannels.important.send("DM failed. (DMs are likely disabled by the user.) Continuing regardless...");
+        }
+
+
+        var messageText = `Here are all the original attachments for review.`;
+		let files = [];
+        for (var attachment of attachments) {
+            if (!attachment.url) continue;
+            if (attachment.size <= 10 * (10 ** 6)) {
+                try {
+                    let file = await fetch(attachment.url);
+                    let fileData = Buffer.from(await file.arrayBuffer());
+                    files.push(new AttachmentBuilder(fileData, { name: attachment.name }));
+                    continue;
+                } catch (err) { }
+            }
+            messageText += `\n<@&${config.activeModeratorsId}> ` + attachment.url + " (This file could not be permanently downloaded. This link may stop functioning at some point.)";
+        }
+        await logChannels.important.send({ content: messageText, flags: [4096], files });
+
+        let id = member.id;
+
+        try {
+            await logChannels.important.send("Attempting to ban user (temporarily in order to remove messages)...");
+            if(util.hasRole(member, config.staffRoleList)) throw Error("Member is staff, ban protection activated");
+            await member.ban({deleteMessageSeconds: 60 * 60 * 24, reason: "Withdrawal Scam Detected by FunkyHelper"});
+        } catch(err) {
+            await logChannels.important.send(`<@&${config.activeModeratorsId}> Warning! ${member} was unable to be banned!\nReason: ` + (err?(err.message??"syke lmao"):"syke lmao"));
+            await liftLock();
+            return;
+        }
+        scamDetectedAndBanned = true;
+
+        await logChannels.important.send("Ban succeeeded. Waiting 15 seconds to catch all messages...");
+        await new Promise(resolve=>{setTimeout(resolve,15000)});
+        await logChannels.important.send("Attempting to delete any stray messages...");
+        for(var i of tempSusMessages) {
+            try {
+                await i.delete();
+                await logChannels.important.send("A message was caught after the user was temporarily banned and has now been deleted. (Dev Note: This was done via `tempSusMessages`.)");
+            } catch(err) {}
+        }
+        await logChannels.important.send("Attempt complete. Attempting to unban user...");
+        try {
+            
+            await message.guild.bans.remove(id);
+            await logChannels.important.send("Unban succeeded.");
+        } catch(err) {
+            await logChannels.important.send(`<@&${config.activeModeratorsId}> Warning! ${member} was unable to be unbanned! Please ensure that user is able to rejoin server.\nReason: ` + (err?(err.message??"syke lmao"):"syke lmao"));
+        }
+
+        await liftLock();
+    }
+
+    async function liftLock() {
+        let lockLiftedEmbed = new EmbedBuilder();
+        lockLiftedEmbed.setTitle("Withdrawal Scam Lock Lifted");
+        lockLiftedEmbed.setDescription("The suspicious message has now been processed, so the bot will now listen for more suspicious messages.");
+        lockLiftedEmbed.setColor("Blue");
+        await logChannels.important.send({embeds: [lockLiftedEmbed]});
+        lock = false;
+        scamDetectedAndBanned = false;
+        dangerUserId = null;
+        tempSusMessages = [];
+    }
+
+    return {
+        onReady,
+        onMessage,
+        liftLock
+    }
+}
