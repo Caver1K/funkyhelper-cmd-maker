@@ -6,27 +6,60 @@
 window.PlaintextEditor = (function () {
     const DEFAULT_LIMIT = 4096;
 
+    function autoGrow(el) {
+        el.style.height = "auto";
+        el.style.height = el.scrollHeight + "px";
+    }
+
     function create(state, opts) {
         opts = opts || {};
         const limit = opts.limit || DEFAULT_LIMIT;
         const placeholder = opts.placeholder || "Type message here...";
         const onChange = opts.onChange || function () {};
 
-        const wrap = document.createElement("div");
-        wrap.className = "plaintext-editor d-flex flex-column";
+        const root = document.createElement("div");
+        root.className = "discord-message";
+
+        const avatar = document.createElement("img");
+        avatar.className = "discord-message-avatar";
+        avatar.src = "vendor/profile-picture.png";
+        avatar.alt = "";
+        root.appendChild(avatar);
+
+        const messageBody = document.createElement("div");
+        messageBody.className = "discord-message-body";
+        root.appendChild(messageBody);
+
+        const messageHeader = document.createElement("div");
+        messageHeader.className = "discord-message-header";
+        messageBody.appendChild(messageHeader);
+
+        const username = document.createElement("span");
+        username.className = "discord-message-username";
+        username.textContent = "FunkyHelper";
+        messageHeader.appendChild(username);
+
+        const appBadge = document.createElement("span");
+        appBadge.className = "discord-app-badge";
+        appBadge.textContent = "APP";
+        messageHeader.appendChild(appBadge);
 
         const textarea = document.createElement("textarea");
-        textarea.className = "plaintext-textarea";
+        textarea.className = "plaintext-textarea discord-message-content";
+        textarea.rows = 1;
         textarea.placeholder = placeholder;
         textarea.maxLength = limit;
         textarea.value = state.text || "";
+        messageBody.appendChild(textarea);
 
         const preview = document.createElement("div");
-        preview.className = "plaintext-preview";
+        preview.className = "plaintext-preview discord-message-content";
         preview.style.display = "none";
+        messageBody.appendChild(preview);
 
         const limitLabel = document.createElement("div");
         limitLabel.className = "field-limit text-end mt-1";
+        messageBody.appendChild(limitLabel);
 
         function updateLimitLabel() {
             const len = (state.text || "").length;
@@ -37,6 +70,7 @@ window.PlaintextEditor = (function () {
         textarea.addEventListener("input", function () {
             state.text = textarea.value;
             updateLimitLabel();
+            autoGrow(textarea);
             onChange();
         });
 
@@ -48,12 +82,8 @@ window.PlaintextEditor = (function () {
 
         updateLimitLabel();
 
-        wrap.appendChild(textarea);
-        wrap.appendChild(preview);
-        wrap.appendChild(limitLabel);
-
         return {
-            el: wrap,
+            el: root,
             setViewMode(mode) {
                 if (mode === "preview") {
                     renderPreview();
@@ -62,6 +92,7 @@ window.PlaintextEditor = (function () {
                 } else {
                     textarea.style.display = "block";
                     preview.style.display = "none";
+                    autoGrow(textarea);
                 }
             },
             refresh() {
@@ -69,6 +100,13 @@ window.PlaintextEditor = (function () {
                     textarea.value = state.text || "";
                 }
                 updateLimitLabel();
+                autoGrow(textarea);
+                if (preview.style.display !== "none") {
+                    renderPreview();
+                }
+            },
+            syncFieldHeights() {
+                autoGrow(textarea);
             }
         };
     }

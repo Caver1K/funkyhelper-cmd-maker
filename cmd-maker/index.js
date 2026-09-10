@@ -151,6 +151,7 @@ window.DiscordMarkdown = (function () {
 
 (function () {
     const STORAGE_KEY = "funkyhelper-cmd-maker-draft";
+    const IMPORT_TOAST_KEY = "funkyhelper-cmd-maker-import-toast";
     const OUTPUT_LIMIT = 4096;
 
     function defaultState() {
@@ -210,7 +211,8 @@ window.DiscordMarkdown = (function () {
 
     /** Full live ".create" command line shown in the output box. */
     function buildCommandText() {
-        const name = (state.commandName || "").trim() || "Command_Name";
+        const name = (state.commandName || "").trim();
+        if (!name) return "";
         if (state.mode === "text") {
             return ".create " + name + " " + (state.plaintext.text || "");
         }
@@ -231,6 +233,38 @@ window.DiscordMarkdown = (function () {
         return "`" + JSON.stringify(buildConsolesPayload()) + "`";
     }
 
+    /* ------------------------------ import ------------------------------- */
+    /* Parses pasted/uploaded content back into command name + mode/payload. */
+    /* Accepts: a bare backtick-wrapped JSON payload, plain text, or a full  */
+    /* ".create Name `...`" / ".create Name plain text" command line.       */
+
+    function parsePayload(payload) {
+        const trimmed = (payload || "").trim();
+        if (trimmed.length >= 2 && trimmed.charAt(0) === "`" && trimmed.charAt(trimmed.length - 1) === "`") {
+            const inner = trimmed.slice(1, -1);
+            try {
+                const json = JSON.parse(inner);
+                if (json && typeof json === "object" && !Array.isArray(json)) {
+                    if (json.consoles && typeof json.consoles === "object") {
+                        return { kind: "consoles", value: json };
+                    }
+                    return { kind: "embed", value: json };
+                }
+            } catch (e) { /* not valid JSON - fall back to plain text below */ }
+            return { kind: "text", value: inner };
+        }
+        return { kind: "text", value: payload || "" };
+    }
+
+    function parseImportedText(raw) {
+        const text = (raw || "").replace(/\r\n/g, "\n");
+        const match = text.match(/^\s*\.create\s+(\S+)\s*([\s\S]*)$/i);
+        if (match) {
+            return { name: match[1], parsed: parsePayload(match[2]) };
+        }
+        return { name: null, parsed: parsePayload(text) };
+    }
+
     /* ---------------------------- DOM wiring ---------------------------- */
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -239,25 +273,49 @@ window.DiscordMarkdown = (function () {
         const commandNameInput = document.getElementById("commandNameInput");
         const viewModeToggleBtn = document.getElementById("viewModeToggleBtn");
         const outputText = document.getElementById("outputText");
+        const outputPanel = document.getElementById("outputPanel");
         const outputError = document.getElementById("outputError");
         const outputCharCount = document.getElementById("outputCharCount");
         const downloadBtn = document.getElementById("downloadBtn");
         const copyBtn = document.getElementById("copyBtn");
+        const uploadBtn = document.getElementById("uploadBtn");
+        const pasteBtn = document.getElementById("pasteBtn");
+        const uploadFileInput = document.getElementById("uploadFileInput");
         const modeTextBtn = document.getElementById("modeTextBtn");
         const modeEmbedBtn = document.getElementById("modeEmbedBtn");
         const modeConsolesBtn = document.getElementById("modeConsolesBtn");
         const panelText = document.getElementById("panel-text");
         const panelEmbed = document.getElementById("panel-embed");
         const panelConsoles = document.getElementById("panel-consoles");
-        const copyToastEl = document.getElementById("copyToast");
-        const copyToast = window.bootstrap ? new window.bootstrap.Toast(copyToastEl) : null;
+        const appToastEl = document.getElementById("appToast");
+        const appToastBody = document.getElementById("appToastBody");
+        const appToast = window.bootstrap ? new window.bootstrap.Toast(appToastEl) : null;
+
+        function showToast(message, variant) {
+            appToastEl.classList.remove("text-bg-success", "text-bg-danger");
+            appToastEl.classList.add(variant === "error" ? "text-bg-danger" : "text-bg-success");
+            appToastBody.textContent = message;
+            if (appToast) appToast.show();
+        }
+
+        try {
+            const pendingToast = sessionStorage.getItem(IMPORT_TOAST_KEY);
+            if (pendingToast) {
+                sessionStorage.removeItem(IMPORT_TOAST_KEY);
+                showToast(pendingToast);
+            }
+        } catch (e) { /* sessionStorage unavailable - no toast, no harm */ }
 
         commandNameInput.value = state.commandName;
 
         function updateOutput() {
+            const hasName = !!(state.commandName || "").trim();
+            commandNameInput.classList.toggle("is-missing", !hasName);
+
             const text = buildCommandText();
             outputCharCount.textContent = text.length + " / " + OUTPUT_LIMIT;
             outputCharCount.classList.toggle("limit-exceeded", text.length > OUTPUT_LIMIT);
+
             if (text.length > OUTPUT_LIMIT) {
                 outputText.textContent = "";
                 outputError.classList.remove("d-none");
@@ -265,6 +323,9 @@ window.DiscordMarkdown = (function () {
                 outputText.textContent = text;
                 outputError.classList.add("d-none");
             }
+
+            downloadBtn.disabled = !hasName;
+            copyBtn.disabled = !hasName;
         }
 
         function handleChange() {
@@ -321,17 +382,154 @@ window.DiscordMarkdown = (function () {
             modeTextBtn.classList.toggle("active", state.mode === "text");
             modeEmbedBtn.classList.toggle("active", state.mode === "embed");
             modeConsolesBtn.classList.toggle("active", state.mode === "consoles");
+            if (state.mode === "text") textEditor.syncFieldHeights();
+            if (state.mode === "embed") embedEditor.syncFieldHeights();
+            if (state.mode === "consoles") consolesEditor.syncFieldHeights();
         }
 
         modeTextBtn.addEventListener("click", function () { state.mode = "text"; applyMode(); handleChange(); });
         modeEmbedBtn.addEventListener("click", function () { state.mode = "embed"; applyMode(); handleChange(); });
-        modeConsolesBtn.addEventListener("click", function () { state.mode = "consoles"; applyMode(); handleChange(); });
+        modeConsolesBtn.addEventListener("click", function () {
+            // Carry an in-progress Embed-tab draft over into Consoles mode instead
+            // of silently losing it, as long as no console has been started yet.
+            const noConsolesYet = state.consoles.length === 0;
+            if (noConsolesYet && !window.EmbedEditor.isEmpty(state.embed)) {
+                const carried = window.ConsolesEditor.newConsole();
+                carried.mode = "embed";
+                carried.embed = Object.assign(window.EmbedEditor.defaultState(), state.embed);
+                state.consoles.push(carried);
+                consolesEditor.refresh();
+            }
+            state.mode = "consoles";
+            applyMode();
+            handleChange();
+        });
 
         /* --------------------------- command name --------------------------- */
 
         commandNameInput.addEventListener("input", function () {
             state.commandName = commandNameInput.value;
             handleChange();
+        });
+
+        /* ------------------------------ import -------------------------------- */
+
+        function applyImport(raw) {
+            if (!(raw || "").trim()) {
+                showToast("Nothing to import.", "error");
+                return;
+            }
+
+            const result = parseImportedText(raw);
+
+            if (result.name) {
+                state.commandName = result.name;
+                commandNameInput.value = result.name;
+            }
+
+            let importedAs = "";
+            if (result.parsed.kind === "embed") {
+                state.mode = "embed";
+                const freshEmbed = result.parsed.value && Object.keys(result.parsed.value).length
+                    ? window.EmbedEditor.fromJson(result.parsed.value)
+                    : window.EmbedEditor.defaultState();
+                Object.keys(state.embed).forEach(function (k) { delete state.embed[k]; });
+                Object.assign(state.embed, freshEmbed);
+                importedAs = "an Embed";
+            } else if (result.parsed.kind === "consoles") {
+                state.mode = "consoles";
+                const freshConsoles = window.ConsolesEditor.fromJson(result.parsed.value);
+                state.consoles.length = 0;
+                freshConsoles.forEach(function (c) { state.consoles.push(c); });
+                window.ConsolesEditor.resyncNextId(state.consoles);
+                importedAs = "Consoles";
+            } else {
+                state.mode = "text";
+                state.plaintext.text = result.parsed.value;
+                importedAs = "Text";
+            }
+
+            saveDraft();
+
+            // Reload so every editor (including nested console cards) is rebuilt
+            // fresh from the saved draft instead of trying to patch live state.
+            try {
+                sessionStorage.setItem(IMPORT_TOAST_KEY, "Imported as " + importedAs + ".");
+            } catch (e) { /* storage unavailable - toast just won't survive the reload */ }
+            window.location.reload();
+        }
+
+        function readAndImportFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function () { applyImport(String(reader.result || "")); };
+            reader.onerror = function () { showToast("Could not read that file.", "error"); };
+            reader.readAsText(file);
+        }
+
+        uploadBtn.addEventListener("click", function () {
+            uploadFileInput.click();
+        });
+
+        uploadFileInput.addEventListener("change", function () {
+            const file = uploadFileInput.files && uploadFileInput.files[0];
+            uploadFileInput.value = "";
+            readAndImportFile(file);
+        });
+
+        /* --------------------------- drag & drop ----------------------------- */
+
+        function dragHasFiles(e) {
+            return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") !== -1);
+        }
+
+        let dragDepth = 0;
+
+        outputPanel.addEventListener("dragenter", function (e) {
+            if (!dragHasFiles(e)) return;
+            e.preventDefault();
+            dragDepth++;
+            outputPanel.classList.add("drag-active");
+        });
+
+        outputPanel.addEventListener("dragover", function (e) {
+            if (!dragHasFiles(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+        });
+
+        outputPanel.addEventListener("dragleave", function (e) {
+            if (!dragHasFiles(e)) return;
+            dragDepth = Math.max(0, dragDepth - 1);
+            if (dragDepth === 0) outputPanel.classList.remove("drag-active");
+        });
+
+        outputPanel.addEventListener("drop", function (e) {
+            if (!dragHasFiles(e)) return;
+            e.preventDefault();
+            dragDepth = 0;
+            outputPanel.classList.remove("drag-active");
+            const file = e.dataTransfer.files && e.dataTransfer.files[0];
+            readAndImportFile(file);
+        });
+
+        // Stop a stray drop elsewhere on the page from navigating away to the file.
+        ["dragover", "drop"].forEach(function (evt) {
+            document.addEventListener(evt, function (e) {
+                if (dragHasFiles(e)) e.preventDefault();
+            });
+        });
+
+        pasteBtn.addEventListener("click", function () {
+            if (!(navigator.clipboard && navigator.clipboard.readText)) {
+                showToast("Clipboard access isn't available in this browser.", "error");
+                return;
+            }
+            navigator.clipboard.readText().then(function (text) {
+                applyImport(text);
+            }).catch(function () {
+                showToast("Couldn't read the clipboard. Check browser permissions.", "error");
+            });
         });
 
         /* ------------------------------ output ------------------------------- */
@@ -353,7 +551,7 @@ window.DiscordMarkdown = (function () {
         copyBtn.addEventListener("click", function () {
             const text = buildCommandText();
             const done = function () {
-                if (copyToast) copyToast.show();
+                showToast("Copied to clipboard!");
             };
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(done).catch(function () {

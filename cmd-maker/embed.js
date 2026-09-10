@@ -17,7 +17,8 @@ window.EmbedEditor = (function () {
             image: "",
             showTitleUrl: false,
             showColor: false,
-            showImage: false
+            showImage: false,
+            showAuthor: false
         };
     }
 
@@ -40,6 +41,11 @@ window.EmbedEditor = (function () {
         }
     }
 
+    function autoGrow(el) {
+        el.style.height = "auto";
+        el.style.height = el.scrollHeight + "px";
+    }
+
     function svgIcon(pathData, size) {
         size = size || 14;
         return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
@@ -55,11 +61,39 @@ window.EmbedEditor = (function () {
         const onChange = opts.onChange || function () {};
 
         const root = document.createElement("div");
-        root.className = "discord-embed-wrapper";
+        root.className = "discord-message";
+
+        const avatar = document.createElement("img");
+        avatar.className = "discord-message-avatar";
+        avatar.src = "vendor/profile-picture.png";
+        avatar.alt = "";
+        root.appendChild(avatar);
+
+        const messageBody = document.createElement("div");
+        messageBody.className = "discord-message-body";
+        root.appendChild(messageBody);
+
+        const messageHeader = document.createElement("div");
+        messageHeader.className = "discord-message-header";
+        messageBody.appendChild(messageHeader);
+
+        const username = document.createElement("span");
+        username.className = "discord-message-username";
+        username.textContent = "FunkyHelper";
+        messageHeader.appendChild(username);
+
+        const appBadge = document.createElement("span");
+        appBadge.className = "discord-app-badge";
+        appBadge.textContent = "APP";
+        messageHeader.appendChild(appBadge);
+
+        const embedWrapper = document.createElement("div");
+        embedWrapper.className = "discord-embed-wrapper";
+        messageBody.appendChild(embedWrapper);
 
         const embed = document.createElement("div");
         embed.className = "discord-embed";
-        root.appendChild(embed);
+        embedWrapper.appendChild(embed);
 
         const colorbar = document.createElement("div");
         colorbar.className = "discord-embed-colorbar";
@@ -130,25 +164,75 @@ window.EmbedEditor = (function () {
         }
 
         /* ---------------------------- author ---------------------------- */
+        let editingMode = true;
+
         const authorRow = document.createElement("div");
         authorRow.className = "embed-author-row";
         body.appendChild(authorRow);
 
-        const authorInput = document.createElement("input");
-        authorInput.type = "text";
-        authorInput.className = "embed-input author-input";
+        const authorToggleBtn = document.createElement("button");
+        authorToggleBtn.type = "button";
+        authorToggleBtn.className = "embed-add-field-btn";
+        authorToggleBtn.innerHTML = PLUS_ICON + "<span>Author</span>";
+        authorRow.appendChild(authorToggleBtn);
+
+        const authorInput = document.createElement("textarea");
+        authorInput.rows = 1;
+        authorInput.className = "embed-input author-input flex-grow-1";
         authorInput.placeholder = "Author name";
         authorInput.maxLength = LIMITS.author;
         authorInput.value = state.author || "";
         authorRow.appendChild(authorInput);
+
+        const authorClearBtn = document.createElement("button");
+        authorClearBtn.type = "button";
+        authorClearBtn.className = "embed-icon-btn flex-shrink-0";
+        authorClearBtn.title = "Remove author";
+        authorClearBtn.innerHTML = CLOSE_ICON;
+        authorRow.appendChild(authorClearBtn);
 
         const authorPreview = document.createElement("div");
         authorPreview.className = "discord-embed-author";
         authorPreview.style.display = "none";
         body.appendChild(authorPreview);
 
+        function syncAuthorRow() {
+            if (!editingMode) {
+                authorToggleBtn.style.display = "none";
+                authorInput.style.display = "none";
+                authorClearBtn.style.display = "none";
+                return;
+            }
+            const shown = !!state.showAuthor;
+            authorToggleBtn.style.display = shown ? "none" : "";
+            authorInput.style.display = shown ? "" : "none";
+            authorClearBtn.style.display = shown ? "" : "none";
+        }
+        syncAuthorRow();
+
+        authorToggleBtn.addEventListener("click", function () {
+            state.showAuthor = true;
+            syncAuthorRow();
+            onChange();
+            authorInput.focus();
+        });
+
+        authorClearBtn.addEventListener("click", function () {
+            state.author = "";
+            state.showAuthor = false;
+            authorInput.value = "";
+            syncAuthorRow();
+            onChange();
+        });
+
+        authorInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") e.preventDefault();
+        });
+
         authorInput.addEventListener("input", function () {
+            if (/\r|\n/.test(authorInput.value)) authorInput.value = authorInput.value.replace(/\r?\n/g, " ");
             state.author = authorInput.value;
+            autoGrow(authorInput);
             onChange();
         });
 
@@ -157,8 +241,8 @@ window.EmbedEditor = (function () {
         titleRow.className = "embed-title-row";
         body.appendChild(titleRow);
 
-        const titleInput = document.createElement("input");
-        titleInput.type = "text";
+        const titleInput = document.createElement("textarea");
+        titleInput.rows = 1;
         titleInput.className = "embed-input title-input flex-grow-1";
         titleInput.placeholder = "Title";
         titleInput.maxLength = LIMITS.title;
@@ -191,14 +275,21 @@ window.EmbedEditor = (function () {
         });
         titleLinkBtn.classList.toggle("active", !!state.showTitleUrl);
 
+        titleInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") e.preventDefault();
+        });
+
         titleInput.addEventListener("input", function () {
+            if (/\r|\n/.test(titleInput.value)) titleInput.value = titleInput.value.replace(/\r?\n/g, " ");
             state.title = titleInput.value;
+            autoGrow(titleInput);
             onChange();
         });
 
         /* -------------------------- description -------------------------- */
         const descTextarea = document.createElement("textarea");
         descTextarea.className = "embed-input description-input";
+        descTextarea.rows = 1;
         descTextarea.placeholder = "Message here";
         descTextarea.maxLength = LIMITS.description;
         descTextarea.value = state.description || "";
@@ -223,6 +314,7 @@ window.EmbedEditor = (function () {
         descTextarea.addEventListener("input", function () {
             state.description = descTextarea.value;
             updateDescLimitLabel();
+            autoGrow(descTextarea);
             onChange();
         });
 
@@ -346,14 +438,20 @@ window.EmbedEditor = (function () {
             updateColorbar();
         }
 
+        function syncFieldHeights() {
+            autoGrow(authorInput);
+            autoGrow(titleInput);
+            autoGrow(descTextarea);
+        }
+
         updateColorbar();
         updateImage();
 
         return {
             el: root,
             setViewMode(mode) {
-                const editing = mode !== "preview";
-                authorInput.style.display = editing ? "" : "none";
+                editingMode = mode !== "preview";
+                const editing = editingMode;
                 authorPreview.style.display = editing ? "none" : "";
                 titleInput.style.display = editing ? "" : "none";
                 titleLinkBtn.style.display = editing ? "" : "none";
@@ -366,12 +464,14 @@ window.EmbedEditor = (function () {
                     titleUrlField.sync();
                     colorField.sync();
                     imageField.sync();
+                    syncFieldHeights();
                 } else {
                     titleUrlField.row.classList.add("d-none");
                     colorField.row.classList.add("d-none");
                     imageField.row.classList.add("d-none");
                     renderPreview();
                 }
+                syncAuthorRow();
                 updateColorbar();
                 updateImage();
             },
@@ -379,10 +479,25 @@ window.EmbedEditor = (function () {
                 authorInput.value = state.author || "";
                 titleInput.value = state.title || "";
                 descTextarea.value = state.description || "";
+                titleUrlField.input.value = state.titleUrl || "";
+                colorField.input.value = state.color || "";
+                imageField.input.value = state.image || "";
+                if (colorField.colorPicker) {
+                    colorField.colorPicker.value = "#" + (normalizeHex(state.color) || DEFAULT_COLOR_PLACEHOLDER);
+                }
+                titleLinkBtn.classList.toggle("active", !!state.showTitleUrl);
+                colorToggleBtn.classList.toggle("active", !!state.showColor);
+                imageToggleBtn.classList.toggle("active", !!state.showImage);
+                titleUrlField.sync();
+                colorField.sync();
+                imageField.sync();
+                syncAuthorRow();
                 updateDescLimitLabel();
                 updateColorbar();
                 updateImage();
-            }
+                syncFieldHeights();
+            },
+            syncFieldHeights: syncFieldHeights
         };
     }
 
@@ -409,5 +524,29 @@ window.EmbedEditor = (function () {
             state.color || state.image || state.titleUrl);
     }
 
-    return { create, defaultState, buildJson, isEmpty, normalizeHex, isHttpUrl, LIMITS };
+    function fromJson(json) {
+        const st = defaultState();
+        json = json && typeof json === "object" ? json : {};
+        if (typeof json.title === "string") st.title = json.title;
+        if (typeof json.description === "string") st.description = json.description;
+        if (typeof json.color === "string" && normalizeHex(json.color)) {
+            st.color = normalizeHex(json.color);
+            st.showColor = true;
+        }
+        if (typeof json.url === "string" && isHttpUrl(json.url)) {
+            st.titleUrl = json.url;
+            st.showTitleUrl = true;
+        }
+        if (typeof json.image === "string" && isHttpUrl(json.image)) {
+            st.image = json.image;
+            st.showImage = true;
+        }
+        if (typeof json.author === "string" && json.author) {
+            st.author = json.author;
+            st.showAuthor = true;
+        }
+        return st;
+    }
+
+    return { create, defaultState, buildJson, fromJson, isEmpty, normalizeHex, isHttpUrl, LIMITS };
 })();

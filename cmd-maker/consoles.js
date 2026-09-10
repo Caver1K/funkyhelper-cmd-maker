@@ -13,7 +13,7 @@ window.ConsolesEditor = (function () {
     }
 
     const TRASH_ICON = svgIcon('<path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>');
-    const PLUS_ICON = svgIcon('<path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>', 22);
+    const PLUS_ICON = svgIcon('<path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>', 14);
 
     function newConsole() {
         return {
@@ -62,9 +62,37 @@ window.ConsolesEditor = (function () {
         const root = document.createElement("div");
         root.className = "d-flex flex-column h-100";
 
+        const header = document.createElement("div");
+        header.className = "consoles-header d-flex justify-content-between align-items-center mb-2";
+
+        const headerLabel = document.createElement("span");
+        headerLabel.className = "text-secondary small";
+        headerLabel.textContent = "Consoles";
+        header.appendChild(headerLabel);
+
+        const addBtnTop = document.createElement("button");
+        addBtnTop.type = "button";
+        addBtnTop.className = "btn btn-primary btn-sm add-console-btn-top";
+        addBtnTop.title = "Add console";
+        addBtnTop.innerHTML = PLUS_ICON + " Add console";
+        addBtnTop.addEventListener("click", function () { addConsole(); });
+        header.appendChild(addBtnTop);
+
+        root.appendChild(header);
+
         const row = document.createElement("div");
         row.className = "consoles-row";
         root.appendChild(row);
+
+        row.addEventListener("wheel", function (e) {
+            // Let the ordinary vertical scroll wheel drive this horizontal
+            // row while the mouse is over it, instead of requiring a
+            // horizontal scrollbar drag or a shift+scroll gesture.
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && row.scrollWidth > row.clientWidth) {
+                row.scrollLeft += e.deltaY;
+                e.preventDefault();
+            }
+        }, { passive: false });
 
         let currentViewMode = "edit";
         let cardInstances = [];
@@ -139,19 +167,21 @@ window.ConsolesEditor = (function () {
             function syncModeButtons() {
                 textBtn.classList.toggle("active", consoleState.mode === "text");
                 embedBtn.classList.toggle("active", consoleState.mode === "embed");
-                textEditor.el.style.display = consoleState.mode === "text" ? "" : "none";
-                embedEditor.el.style.display = consoleState.mode === "embed" ? "" : "none";
+                textEditor.el.classList.toggle("console-editor-hidden", consoleState.mode !== "text");
+                embedEditor.el.classList.toggle("console-editor-hidden", consoleState.mode !== "embed");
             }
             syncModeButtons();
 
             textBtn.addEventListener("click", function () {
                 consoleState.mode = "text";
                 syncModeButtons();
+                textEditor.syncFieldHeights();
                 onChange();
             });
             embedBtn.addEventListener("click", function () {
                 consoleState.mode = "embed";
                 syncModeButtons();
+                embedEditor.syncFieldHeights();
                 onChange();
             });
 
@@ -184,6 +214,10 @@ window.ConsolesEditor = (function () {
                     textEditor.refresh();
                     embedEditor.refresh();
                     syncModeButtons();
+                },
+                syncFieldHeights() {
+                    textEditor.syncFieldHeights();
+                    embedEditor.syncFieldHeights();
                 }
             };
         }
@@ -198,21 +232,10 @@ window.ConsolesEditor = (function () {
 
             consolesArray.forEach(function (c) {
                 const inst = buildCard(c);
-                inst.setViewMode(currentViewMode);
                 cardInstances.push(inst);
                 row.appendChild(inst.el);
+                inst.setViewMode(currentViewMode);
             });
-
-            const addColumn = document.createElement("div");
-            addColumn.className = "add-console-column";
-            const addBtn = document.createElement("button");
-            addBtn.type = "button";
-            addBtn.className = "btn btn-primary add-console-btn";
-            addBtn.title = "Add console";
-            addBtn.innerHTML = PLUS_ICON;
-            addBtn.addEventListener("click", addConsole);
-            addColumn.appendChild(addBtn);
-            row.appendChild(addColumn);
         }
 
         render();
@@ -225,6 +248,9 @@ window.ConsolesEditor = (function () {
             },
             refresh() {
                 render();
+            },
+            syncFieldHeights() {
+                cardInstances.forEach(function (inst) { inst.syncFieldHeights(); });
             }
         };
     }
@@ -274,5 +300,29 @@ window.ConsolesEditor = (function () {
         nextId = max + 1;
     }
 
-    return { create, newConsole, buildJson, resyncNextId };
+    function fromJson(payload) {
+        const consolesObj = (payload && typeof payload.consoles === "object" && payload.consoles) || {};
+        const maps = (payload && typeof payload.consoleMaps === "object" && payload.consoleMaps) || {};
+        const result = [];
+
+        Object.keys(consolesObj).forEach(function (key) {
+            const content = consolesObj[key];
+            const names = Array.isArray(maps[key]) && maps[key].length ? maps[key] : [key.replace(/-$/, "")];
+            const c = newConsole();
+            c.namesRaw = names.join(", ");
+
+            if (typeof content === "string") {
+                c.mode = "text";
+                c.text = content;
+            } else if (content && typeof content === "object") {
+                c.mode = "embed";
+                c.embed = window.EmbedEditor.fromJson(content);
+            }
+            result.push(c);
+        });
+
+        return result;
+    }
+
+    return { create, newConsole, buildJson, fromJson, resyncNextId };
 })();
