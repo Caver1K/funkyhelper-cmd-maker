@@ -537,7 +537,7 @@ window.DiscordMarkdown = (function () {
         downloadBtn.addEventListener("click", function () {
             const content = buildDownloadContent();
             const filename = sanitizeFilename(state.commandName) + ".botcmd";
-            const blob = new Blob([content], { type: "text/plain" });
+            const blob = new Blob([content], { type: "application/octet-stream" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
